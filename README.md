@@ -9,6 +9,10 @@ Cara menjalankan project:
     docker compose exec web python manage.py migrate (untuk pertama kali)
     docker compose start
 ```
+Buka di browser:
+```
+http://localhost:8000
+```
 Cara menutup project:
 ```  
     docker compose stop
