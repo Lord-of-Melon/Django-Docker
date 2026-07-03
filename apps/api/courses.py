@@ -1,3 +1,5 @@
+from unicodedata import category
+
 from ninja import Router
 from apps.models import Course, Category
 from .schemas import CourseOut, CourseCreate
@@ -24,7 +26,10 @@ def create_course(request, data: CourseCreate):
 
     is_instructor(request.auth)
 
-    category = Category.objects.get(id=data.category_id)
+    category = get_object_or_404(
+        Category,
+        id=data.category_id
+    )
 
     course = Course.objects.create(
         title=data.title,
@@ -42,7 +47,12 @@ def update_course(request, course_id: int, data: CourseCreate):
     is_course_owner(request.auth, course)
 
     course.title = data.title
-    course.category = Category.objects.get(id=data.category_id)
+    category = get_object_or_404(
+    Category,
+    id=data.category_id
+    )
+    
+    course.category = category
 
     course.save()
 
