@@ -70,4 +70,11 @@ class CourseCreate(Schema):
     title: str
     category_id: int
 
-    
+class EnrollmentCreate(Schema):
+    course_id: int
+
+class EnrollmentOut(Schema):
+    id: int
+    course: CourseOut
+    enrolled_at: datetime
+
