@@ -235,5 +235,405 @@ Konfigurasi Admin meliputi:
 - Lesson Inline pada Course
 - Optimized Query menggunakan `list_select_related()`
 
+---
 
+# << Progress 3 >>
+
+Pada progress ini sistem dikembangkan menjadi **REST API** menggunakan **Django Ninja** dengan implementasi **JWT Authentication**, **Role-Based Access Control (RBAC)**, dan dokumentasi API menggunakan **Swagger**.
+
+# Tech Stack (Tambahan)
+
+- Django Ninja
+- Pydantic
+- JWT (JSON Web Token)
+- Swagger UI
+
+---
+
+# REST API Documentation
+
+Dokumentasi API dapat diakses melalui:
+
+```
+http://localhost:8000/api/docs
+```
+
+OpenAPI JSON:
+
+```
+http://localhost:8000/api/openapi.json
+```
+
+> Tambahkan screenshot halaman Swagger UI di bawah ini.
+
+<!-- Screenshot Swagger -->
+
+---
+
+# Authentication System
+
+Autentikasi menggunakan **JWT (JSON Web Token)**.
+
+Flow autentikasi:
+
+```
+Register
+     │
+     ▼
+ Login
+     │
+     ▼
+Access Token + Refresh Token
+     │
+     ▼
+Authorization: Bearer <access_token>
+     │
+     ▼
+Protected Endpoint
+```
+
+Fitur yang telah diimplementasikan:
+
+- User Registration
+- User Login
+- JWT Access Token
+- JWT Refresh Token
+- Current User Endpoint
+- Update Profile
+- Password Hashing menggunakan Django Authentication
+
+---
+
+# Authentication Endpoints
+
+## Register
+
+```
+POST /api/auth/register
+```
+
+Mendaftarkan user baru.
+
+Request:
+
+```json
+{
+    "username": "student1",
+    "email": "student@email.com",
+    "password": "password123"
+}
+```
+
+Response:
+
+```json
+{
+    "id": 1,
+    "username": "student1",
+    "email": "student@email.com",
+    "role": "student"
+}
+```
+
+---
+
+## Login
+
+```
+POST /api/auth/login
+```
+
+Login dan menghasilkan JWT Token.
+
+Response:
+
+```json
+{
+    "access": "<access_token>",
+    "refresh": "<refresh_token>"
+}
+```
+
+---
+
+## Refresh Token
+
+```
+POST /api/auth/refresh
+```
+
+Menghasilkan Access Token baru menggunakan Refresh Token.
+
+---
+
+## Current User
+
+```
+GET /api/auth/me
+```
+
+Mengambil informasi user yang sedang login.
+
+---
+
+## Update Profile
+
+```
+PUT /api/auth/me
+```
+
+Mengubah informasi profile user.
+
+---
+
+# Public API
+
+Endpoint yang dapat diakses tanpa login.
+
+## List Courses
+
+```
+GET /api/courses
+```
+
+Menampilkan daftar seluruh course.
+
+Fitur:
+
+- List Course
+- Nested Instructor
+- Nested Category
+
+---
+
+## Course Detail
+
+```
+GET /api/courses/{id}
+```
+
+Menampilkan detail course berdasarkan ID.
+
+---
+
+# Protected API
+
+Endpoint yang membutuhkan JWT Authentication.
+
+## Create Course
+
+```
+POST /api/courses
+```
+
+Hak akses:
+
+- Instructor
+
+Instructor dapat membuat course baru.
+
+---
+
+## Update Course
+
+```
+PATCH /api/courses/{id}
+```
+
+Hak akses:
+
+- Instructor (Owner)
+
+Instructor hanya dapat mengubah course miliknya sendiri.
+
+---
+
+## Delete Course
+
+```
+DELETE /api/courses/{id}
+```
+
+Hak akses:
+
+- Admin
+
+Hanya Admin yang dapat menghapus course.
+
+---
+
+# Enrollment API
+
+## Enroll Course
+
+```
+POST /api/enrollments
+```
+
+Hak akses:
+
+- Student
+
+Student dapat mendaftar ke course.
+
+Constraint:
+
+- Tidak dapat mendaftar course yang sama lebih dari satu kali.
+
+---
+
+## My Courses
+
+```
+GET /api/enrollments/my-courses
+```
+
+Hak akses:
+
+- Student
+
+Menampilkan seluruh course yang telah diikuti oleh student.
+
+---
+
+## Lesson Progress
+
+```
+POST /api/enrollments/{id}/progress
+```
+
+Hak akses:
+
+- Student
+
+Menandai lesson sebagai selesai.
+
+Validasi:
+
+- Lesson harus berasal dari course yang sedang diikuti.
+
+---
+
+# Role Based Access Control (RBAC)
+
+Project menerapkan Role-Based Access Control menggunakan Custom Permission.
+
+Role yang tersedia:
+
+- Admin
+- Instructor
+- Student
+
+Permission:
+
+| Role | Permission |
+|------|------------|
+| Admin | Delete Course |
+| Instructor | Create Course |
+| Instructor (Owner) | Update Course |
+| Student | Enrollment Course |
+| Student | Update Lesson Progress |
+
+Permission diimplementasikan melalui helper:
+
+```python
+is_admin()
+is_instructor()
+is_student()
+is_course_owner()
+```
+
+---
+
+# JWT Authentication Middleware
+
+Seluruh endpoint protected menggunakan custom authentication class.
+
+```
+Authorization
+        │
+        ▼
+Bearer Token
+        │
+        ▼
+JWT Validation
+        │
+        ▼
+Authenticated User
+```
+
+Authentication dilakukan menggunakan class:
+
+```python
+JWTAuth(HttpBearer)
+```
+
+---
+
+# Pydantic Schema Validation
+
+Seluruh request dan response API divalidasi menggunakan Pydantic Schema.
+
+Schema yang digunakan antara lain:
+
+- RegisterSchema
+- LoginSchema
+- RefreshSchema
+- UserOut
+- CourseOut
+- CourseCreate
+- EnrollmentCreate
+- EnrollmentOut
+- ProgressCreate
+- ProgressOut
+
+Keuntungan:
+
+- Automatic Validation
+- Automatic Serialization
+- Automatic Swagger Documentation
+
+---
+
+# Project Structure
+
+```
+apps/
+│
+├── api/
+│   ├── auth.py
+│   ├── courses.py
+│   ├── enrollments.py
+│   ├── permissions.py
+│   ├── router.py
+│   ├── schemas.py
+│   └── security.py
+│
+├── migrations/
+├── admin.py
+├── models.py
+└── ...
+```
+
+---
+
+# API Summary
+
+| Endpoint | Authentication | Role |
+|-----------|---------------|------|
+| POST /api/auth/register | Public | - |
+| POST /api/auth/login | Public | - |
+| POST /api/auth/refresh | Public | - |
+| GET /api/auth/me | JWT | All User |
+| PUT /api/auth/me | JWT | All User |
+| GET /api/courses | Public | - |
+| GET /api/courses/{id} | Public | - |
+| POST /api/courses | JWT | Instructor |
+| PATCH /api/courses/{id} | JWT | Instructor (Owner) |
+| DELETE /api/courses/{id} | JWT | Admin |
+| POST /api/enrollments | JWT | Student |
+| GET /api/enrollments/my-courses | JWT | Student |
+| POST /api/enrollments/{id}/progress | JWT | Student |
+
+---
 
