@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate
 from ninja.errors import HttpError
 from ninja_jwt.tokens import RefreshToken, TokenError
 from .security import JWTAuth
+from apps.mongodb.logger import log_activity
 
 router = Router(tags=["Authentication"])
 
@@ -28,6 +29,11 @@ def register(request, data: RegisterSchema):
         email=data.email,
         password=data.password
     )
+    log_activity(
+        user=user,
+        action="REGISTER",
+        detail={}
+    )
 
     return 201, user
 
@@ -46,6 +52,12 @@ def login(request, data: LoginSchema):
         )
 
     refresh = RefreshToken.for_user(user)
+
+    log_activity(
+        user=user,
+        action="LOGIN",
+        detail={}
+    )
 
     return {
         "access": str(refresh.access_token),
