@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'apps',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -134,3 +135,47 @@ NINJA_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
+
+# CELERY
+CELERY_BROKER_URL = (
+    f"amqp://{os.getenv('RABBITMQ_DEFAULT_USER')}:"
+    f"{os.getenv('RABBITMQ_DEFAULT_PASS')}@"
+    f"{os.getenv('RABBITMQ_HOST')}:5672//"
+)
+CELERY_RESULT_BACKEND = (
+    f"redis://{os.getenv('REDIS_HOST')}:{os.getenv('REDIS_PORT')}/0"
+)
+CELERY_ACCEPT_CONTENT = ["json"]
+
+CELERY_TASK_SERIALIZER = "json"
+
+CELERY_RESULT_SERIALIZER = "json"
+
+CELERY_TIMEZONE = "Asia/Jakarta"
+
+CELERY_ENABLE_UTC = False
+
+CELERY_TASK_TRACK_STARTED = True
+
+CELERY_TASK_TIME_LIMIT = 30 * 60      # 30 menit
+
+CELERY_RESULT_EXPIRES = 3600           # hasil task disimpan 1 jam
+
+CELERY_BEAT_SCHEDULER = (
+    "django_celery_beat.schedulers:DatabaseScheduler"
+)
+
+# Redis Cache
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://redis:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+        "KEY_PREFIX": "elearning"
+    }
+}
+MONGO_HOST = os.getenv("MONGO_HOST", "mongodb")
+MONGO_PORT = int(os.getenv("MONGO_PORT", 27017))
+MONGO_DB = os.getenv("MONGO_DB", "elearning")

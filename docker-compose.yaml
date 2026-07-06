@@ -1,9 +1,10 @@
-version: '3.9'
+# version: '3.9'
 
 services:
   web:
     build: .
     container_name: django_app
+    restart: unless-stopped
     command: python manage.py runserver 0.0.0.0:8000
     env_file:
       - .env
@@ -13,6 +14,9 @@ services:
       - "8000:8000"
     depends_on:
       - db
+      - redis
+      - mongodb
+      - rabbitmq
 
   db:
     image: postgres:16
@@ -27,5 +31,75 @@ services:
     ports:
       - "5432:5432"
 
+  redis:
+    image: redis:8-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  mongodb:
+    image: mongo:8
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  celery-worker:
+    build: .
+    container_name: celery_worker
+    restart: unless-stopped
+    command: celery -A config.celery:app worker -l info
+    depends_on:
+      - rabbitmq
+      - redis
+      - db
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+
+  celery-beat:
+    build: .
+    container_name: celery_beat
+    restart: unless-stopped
+    command: celery -A config.celery:app beat -l info
+    depends_on:
+      - rabbitmq
+      - redis
+      - db
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+
+  flower:
+    build: .
+    container_name: flower
+    restart: unless-stopped
+    command: celery -A config.celery:app flower --port=5555
+    depends_on:
+        - rabbitmq
+        - redis
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env
+
 volumes:
   postgres_data:
+  mongodb_data:
+  
