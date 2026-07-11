@@ -637,3 +637,488 @@ apps/
 
 ---
 
+# << Progress 4 >>
+
+Pada progress ini sistem dikembangkan dengan menambahkan **Redis** sebagai caching layer, **MongoDB** untuk penyimpanan activity log dan learning analytics, serta **Celery** dengan **RabbitMQ** untuk menjalankan asynchronous task. Selain itu ditambahkan **Flower** sebagai monitoring Celery Worker.
+
+# Tech Stack (Tambahan)
+
+- Redis
+- Celery
+- RabbitMQ
+- Flower
+
+---
+
+# Architecture
+
+Project menggunakan beberapa service yang saling terintegrasi.
+
+```mermaid
+flowchart LR
+
+Client --> Django
+
+Django --> PostgreSQL
+Django --> Redis
+Django --> MongoDB
+
+Django --> RabbitMQ
+
+RabbitMQ --> CeleryWorker
+CeleryBeat --> RabbitMQ
+
+CeleryWorker --> PostgreSQL
+CeleryWorker --> MongoDB
+
+Flower --> CeleryWorker
+```
+
+---
+
+# Docker Services
+
+Project sekarang menggunakan beberapa container:
+
+| Service | Fungsi |
+|----------|---------|
+| Django | REST API |
+| PostgreSQL | Relational Database |
+| Redis | Caching & Rate Limiting |
+| MongoDB | Activity Log & Analytics |
+| RabbitMQ | Message Broker |
+| Celery Worker | Menjalankan asynchronous task |
+| Celery Beat | Menjalankan scheduled task |
+| Flower | Monitoring Celery |
+
+---
+
+# Redis Integration
+
+Redis digunakan sebagai cache untuk mengurangi query langsung ke PostgreSQL.
+
+Implementasi:
+
+- Course List Cache
+- Course Detail Cache
+- Cache Invalidation
+- Rate Limiting
+
+---
+
+## Course List Cache
+
+Endpoint:
+
+```
+GET /api/courses
+```
+
+Flow:
+
+```
+Request
+   │
+   ▼
+Redis
+   │
+ ┌─┴──────────┐
+ │            │
+Hit         Miss
+ │            │
+ ▼            ▼
+Return     PostgreSQL
+Cache      Query
+              │
+              ▼
+        Save to Redis
+```
+
+Cache Key:
+
+```
+course_list
+```
+
+---
+
+## Course Detail Cache
+
+Endpoint:
+
+```
+GET /api/courses/{id}
+```
+
+Cache Key:
+
+```
+course_<course_id>
+```
+
+Contoh:
+
+```
+course_1
+course_2
+course_3
+```
+
+---
+
+## Cache Invalidation
+
+Cache akan dihapus ketika data Course berubah.
+
+Terjadi pada endpoint:
+
+- Create Course
+- Update Course
+- Delete Course
+
+Cache yang dihapus:
+
+```
+course_list
+
+course_<id>
+```
+
+Dengan strategi ini data cache selalu konsisten dengan database.
+
+---
+
+# Rate Limiting
+
+Rate limiting diimplementasikan menggunakan Redis.
+
+Limit:
+
+```
+60 request / menit
+```
+
+Apabila melebihi limit maka API akan mengembalikan response:
+
+```
+429 Too Many Requests
+```
+
+---
+
+# MongoDB Integration
+
+MongoDB digunakan sebagai document database untuk menyimpan data yang tidak memerlukan relasi kompleks.
+
+Collection yang digunakan:
+
+- activity_logs
+- learning_analytics
+
+---
+
+## Activity Logs
+
+Menyimpan seluruh aktivitas penting user.
+
+Contoh data:
+
+```json
+{
+    "user": "student1",
+    "action": "ENROLL_COURSE",
+    "detail": {
+        "course": "Python Backend"
+    },
+    "timestamp": "2026-07-05T18:00:00"
+}
+```
+
+Activity yang dicatat antara lain:
+
+- Login
+- Create Course
+- Update Course
+- Delete Course
+- Enrollment
+- Complete Lesson
+
+---
+
+## Learning Analytics
+
+Digunakan untuk menyimpan data analitik pembelajaran.
+
+Contoh:
+
+```json
+{
+    "course": "Python Backend",
+    "student": "student1",
+    "completed": true,
+    "timestamp": "2026-07-05T18:30:00"
+}
+```
+
+Collection ini dapat digunakan untuk membuat dashboard atau laporan analitik.
+
+---
+
+# Aggregation Report
+
+MongoDB Aggregation digunakan untuk menghasilkan laporan.
+
+Contoh:
+
+- Total completion setiap course
+- Total aktivitas user
+- Statistik pembelajaran
+
+---
+
+# Celery Integration
+
+Celery digunakan untuk menjalankan proses asynchronous sehingga request API dapat diproses lebih cepat.
+
+Flow:
+
+```
+API Request
+      │
+      ▼
+RabbitMQ
+      │
+      ▼
+Celery Worker
+      │
+      ▼
+Execute Task
+```
+
+---
+
+# Celery Tasks
+
+Task yang telah dibuat:
+
+## 1. Send Enrollment Email
+
+Task:
+
+```
+send_enrollment_email
+```
+
+Dijalankan ketika student berhasil melakukan enrollment.
+
+---
+
+## 2. Generate Certificate
+
+Task:
+
+```
+generate_certificate
+```
+
+Dijalankan ketika seluruh lesson pada course telah selesai.
+
+---
+
+## 3. Update Course Statistics
+
+Task:
+
+```
+update_course_statistics
+```
+
+Berjalan secara terjadwal menggunakan Celery Beat.
+
+Fungsi:
+
+- Menghitung jumlah enrollment setiap course
+- Memperbarui statistik course
+
+---
+
+## 4. Export Course Report
+
+Task:
+
+```
+export_course_report
+```
+
+Menghasilkan file CSV secara asynchronous.
+
+Contoh isi:
+
+```
+ID,Title,Instructor,Category
+1,Python Backend,admin,Programming
+2,Android Development,instructor,Mobile Development
+```
+
+---
+
+# RabbitMQ
+
+RabbitMQ digunakan sebagai message broker.
+
+Fungsi:
+
+- Menyimpan antrean task
+- Menghubungkan Django dengan Celery Worker
+- Menjamin task diproses secara asynchronous
+
+Management Dashboard:
+
+```
+http://localhost:15672
+```
+
+Default Login:
+
+```
+Username : guest
+
+Password : guest
+```
+
+---
+
+# Celery Beat
+
+Celery Beat digunakan untuk menjalankan task berdasarkan jadwal.
+
+Contoh scheduled task:
+
+- Update Course Statistics setiap 1 menit (development)
+- Export Course Report setiap hari
+
+Flow:
+
+```
+Celery Beat
+      │
+      ▼
+RabbitMQ
+      │
+      ▼
+Celery Worker
+```
+
+---
+
+# Flower
+
+Flower digunakan untuk monitoring Celery.
+
+Dashboard:
+
+```
+http://localhost:5555
+```
+
+Informasi yang dapat dilihat:
+
+- Active Worker
+- Running Task
+- Completed Task
+- Failed Task
+- Task History
+
+---
+
+# Redis CLI
+
+Masuk ke Redis CLI:
+
+```bash
+docker compose exec redis redis-cli
+```
+
+Beberapa command yang sering digunakan:
+
+Lihat seluruh key
+
+```bash
+KEYS *
+```
+
+Melihat isi cache
+
+```bash
+GET course_list
+```
+
+Menghapus cache
+
+```bash
+DEL course_list
+```
+
+Menghapus seluruh cache
+
+```bash
+FLUSHALL
+```
+
+---
+
+# Project Structure
+
+```
+apps/
+│
+├── api/
+├── mongodb/
+│   ├── client.py
+│   ├── logger.py
+│   └── report.py
+│
+├── tasks/
+│   ├── email_tasks.py
+│   ├── certificate_tasks.py
+│   ├── statistics_tasks.py
+│   └── report_tasks.py
+│
+├── models.py
+└── ...
+```
+
+---
+
+# Monitoring Dashboard
+
+| Service | URL |
+|----------|-----|
+| Swagger | http://localhost:8000/api/docs |
+| Flower | http://localhost:5555 |
+| RabbitMQ | http://localhost:15672 |
+
+---
+
+# Progress 4 Summary
+
+Fitur yang berhasil diimplementasikan:
+
+- ✅ Redis Caching
+- ✅ Course List Cache
+- ✅ Course Detail Cache
+- ✅ Cache Invalidation
+- ✅ Redis Rate Limiting
+- ✅ MongoDB Activity Logs
+- ✅ MongoDB Learning Analytics
+- ✅ MongoDB Aggregation
+- ✅ Celery Worker
+- ✅ RabbitMQ
+- ✅ Celery Beat
+- ✅ Flower Monitoring
+- ✅ Send Enrollment Email Task
+- ✅ Generate Certificate Task
+- ✅ Update Course Statistics Task
+- ✅ Export Course Report Task
+---
+
