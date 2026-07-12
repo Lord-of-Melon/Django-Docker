@@ -1122,3 +1122,343 @@ Fitur yang berhasil diimplementasikan:
 - ✅ Export Course Report Task
 ---
 
+# << Progress 5 (UAS) >>
+
+Pada progress ini dilakukan penyempurnaan fitur Learning Management System (LMS) yang telah dibangun pada progress sebelumnya. Fokus utama pengembangan meliputi sistem review course, wishlist, dashboard mahasiswa, rekomendasi course, optimasi performa, serta penyempurnaan logging dan asynchronous processing.
+
+# Fitur Baru
+
+## 1. Dashboard Student
+
+Ditambahkan endpoint dashboard yang menampilkan ringkasan aktivitas mahasiswa.
+
+Endpoint:
+
+```
+GET /api/dashboard
+```
+
+Informasi yang ditampilkan:
+
+- Active Courses
+- Completed Courses
+- Wishlist Count
+- Recommendation Count
+- Overall Progress
+- Active Course List
+- Recommended Courses
+
+Contoh response:
+
+```json
+{
+    "active_courses": 2,
+    "completed_courses": 1,
+    "wishlist_count": 3,
+    "recommendation_count": 2,
+    "overall_progress": 75
+}
+```
+
+---
+
+## 2. Wishlist
+
+Mahasiswa dapat menyimpan course yang ingin dipelajari.
+
+Endpoint:
+
+```
+POST /api/wishlist/{course_id}
+```
+
+Menghapus wishlist:
+
+```
+DELETE /api/wishlist/{course_id}
+```
+
+Melihat wishlist:
+
+```
+GET /api/wishlist
+```
+
+Constraint:
+
+- Course tidak dapat ditambahkan dua kali ke wishlist.
+
+---
+
+## 3. Review & Rating
+
+Mahasiswa dapat memberikan penilaian terhadap course yang telah diikuti.
+
+Endpoint:
+
+```
+POST /api/reviews/{course_id}
+```
+
+Update review:
+
+```
+PATCH /api/reviews/{review_id}
+```
+
+Delete review:
+
+```
+DELETE /api/reviews/{review_id}
+```
+
+List review:
+
+```
+GET /api/reviews/course/{course_id}
+```
+
+Validasi:
+
+- Hanya student yang telah melakukan enrollment yang dapat memberikan review.
+- Satu student hanya dapat memberikan satu review pada setiap course.
+- Rating memiliki rentang nilai 1–10.
+
+---
+
+## 4. Automatic Course Rating
+
+Nilai rata-rata rating course dihitung secara otomatis.
+
+Setiap kali:
+
+- membuat review
+- mengubah review
+- menghapus review
+
+maka field:
+
+```
+average_rating
+```
+
+akan diperbarui menggunakan Django Aggregation.
+
+Contoh:
+
+```python
+Review.objects.aggregate(
+    Avg("rating")
+)
+```
+
+---
+
+## 5. Student Progress
+
+Progress pembelajaran dihitung berdasarkan jumlah lesson yang telah diselesaikan.
+
+Rumus:
+
+```
+Progress =
+Completed Lesson
+---------------- × 100%
+Total Lesson
+```
+
+Progress ditampilkan pada Dashboard Student.
+
+---
+
+## 6. Course Recommendation
+
+Dashboard akan memberikan rekomendasi course berdasarkan kategori course yang sedang dipelajari mahasiswa.
+
+Urutan rekomendasi:
+
+- Average Rating tertinggi
+- Student Count terbanyak
+
+Course yang sudah diikuti tidak akan direkomendasikan kembali.
+
+---
+
+## 7. Dashboard Cache
+
+Dashboard menggunakan Redis Cache.
+
+Cache Key:
+
+```
+dashboard_<user_id>
+```
+
+Contoh:
+
+```
+dashboard_4
+```
+
+Cache akan dihapus ketika:
+
+- enrollment baru
+- progress selesai
+- review berubah
+- wishlist berubah
+
+Sehingga data dashboard tetap konsisten.
+
+---
+
+## 8. Cache Invalidation
+
+Redis cache diperluas sehingga perubahan data penting langsung memperbarui cache.
+
+Cache akan dibersihkan ketika:
+
+- Create Course
+- Update Course
+- Delete Course
+- Enrollment
+- Complete Course
+- Review
+- Wishlist
+
+---
+
+## 9. Activity Logging
+
+MongoDB Activity Log diperluas.
+
+Activity yang dicatat:
+
+- View Dashboard
+- Add Wishlist
+- Remove Wishlist
+- Create Review
+- Update Review
+- Delete Review
+- Complete Course
+
+Contoh dokumen:
+
+```json
+{
+    "user": "student1",
+    "action": "CREATE_REVIEW",
+    "detail": {
+        "course_id": 1,
+        "rating": 9
+    }
+}
+```
+
+---
+
+## 10. Learning Analytics
+
+Learning Analytics diperbarui setiap kali student menyelesaikan lesson.
+
+Informasi yang dicatat:
+
+- Student
+- Course
+- Completion Status
+- Timestamp
+
+Data ini dapat digunakan sebagai dasar analisis perkembangan pembelajaran.
+
+---
+
+## 11. Celery Integration
+
+Implementasi Celery diperluas untuk menjalankan proses asynchronous.
+
+Task yang digunakan:
+
+- Send Enrollment Email
+- Generate Certificate
+- Update Course Statistics
+- Export Course Report
+
+Semua task dikirim melalui RabbitMQ dan diproses oleh Celery Worker.
+
+---
+
+## 12. RabbitMQ Monitoring
+
+RabbitMQ digunakan sebagai message broker.
+
+Dashboard:
+
+```
+http://localhost:15672
+```
+
+Informasi yang tersedia:
+
+- Queued Messages
+- Message Rate
+- Exchanges
+- Queues
+- Consumers
+- Connections
+
+---
+
+## 13. Flower Monitoring
+
+Flower digunakan untuk memonitor Celery Worker.
+
+Dashboard:
+
+```
+http://localhost:5555
+```
+
+Informasi yang dapat dipantau:
+
+- Worker Status
+- Active Task
+- Processed Task
+- Success Task
+- Failed Task
+- Load Average
+
+---
+
+# API Summary (Tambahan)
+
+| Endpoint | Method | Role |
+|-----------|--------|------|
+| /api/dashboard | GET | Student |
+| /api/wishlist | GET | Student |
+| /api/wishlist/{id} | POST | Student |
+| /api/wishlist/{id} | DELETE | Student |
+| /api/reviews/{course_id} | POST | Student |
+| /api/reviews/{review_id} | PATCH | Student |
+| /api/reviews/{review_id} | DELETE | Student |
+| /api/reviews/course/{course_id} | GET | Public |
+
+---
+
+# Progress 5 Summary
+
+Fitur yang berhasil diimplementasikan:
+
+- ✅ Student Dashboard
+- ✅ Overall Progress
+- ✅ Dashboard Cache
+- ✅ Wishlist
+- ✅ Review System
+- ✅ Course Rating
+- ✅ Recommendation Course
+- ✅ Automatic Average Rating
+- ✅ Complete Course Detection
+- ✅ MongoDB Activity Log
+- ✅ Learning Analytics
+- ✅ Redis Cache Invalidation
+- ✅ RabbitMQ Monitoring
+- ✅ Flower Monitoring
+- ✅ Celery Background Tasks
