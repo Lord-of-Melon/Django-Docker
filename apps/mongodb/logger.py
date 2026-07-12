@@ -3,15 +3,13 @@ from .client import db
 
 
 def log_activity(user, action, detail=None):
-    """
-    Menyimpan activity log ke MongoDB
-    """
 
-    db.activity_logs.insert_one({
-        "user_id": user.id,
-        "username": user.username,
-        "role": user.role,
+    document = {
+        "user_id": user.id if user else None,
+        "username": user.username if user else "Anonymous",
         "action": action,
         "detail": detail or {},
-        "timestamp": datetime.utcnow()
-    })
+        "created_at": datetime.utcnow(),
+    }
+
+    db.activity_logs.insert_one(document)

@@ -4,12 +4,14 @@ from apps.mongodb.logger import log_activity
 from apps.mongodb.analytics import update_learning_analytics
 from apps.tasks.email_tasks import send_enrollment_email
 from apps.tasks.certificate_tasks import generate_certificate
+from django.core.cache import cache
 
 from apps.models import (
     Course,
     Enrollment,
     Lesson,
     Progress,
+    Wishlist,
 )
 
 from .schemas import (
@@ -41,6 +43,13 @@ def enroll(request, data: EnrollmentCreate):
 
     if created:
 
+        course.student_count = Enrollment.objects.filter(
+            course=course
+        ).count()
+
+        if course.status == "inactive":
+            course.status = "active"
+        
         log_activity(
             user=request.auth,
             action="ENROLL_COURSE",
@@ -55,7 +64,17 @@ def enroll(request, data: EnrollmentCreate):
             course.title
         )
 
+        course.save(
+            update_fields=[
+                "student_count",
+                "status"
+            ]
+        )
+
+        cache.clear()
+
     return enrollment
+
 @router.get("/my-courses", auth=JWTAuth(), response=list[EnrollmentOut])
 def my_courses(request):
 
@@ -105,8 +124,9 @@ def complete_lesson(
         lesson=lesson
     )
 
-    progress.completed = True
-    progress.save()
+    if not progress.completed:
+        progress.completed = True
+        progress.save(update_fields=["completed"])
     
     total_lessons = Lesson.objects.filter(
         course=enrollment.course
@@ -117,11 +137,40 @@ def complete_lesson(
         completed=True
     ).count()
 
-    if total_lessons > 0 and completed_lessons == total_lessons:
+    if (
+        total_lessons > 0
+        and completed_lessons == total_lessons
+        and enrollment.status != "completed"
+    ):
+
+        enrollment.status = "completed"
+        enrollment.save(update_fields=["status"])
+
+        course = enrollment.course
+
+        course.status = "completed"
+
+        course.save(update_fields=["status"])
+
+        cache.clear()
+
+        Wishlist.objects.filter(
+            student=enrollment.student,
+            course=enrollment.course
+        ).delete()
 
         generate_certificate.delay(
             enrollment.student.username,
             enrollment.course.title
+        )
+
+        log_activity(
+            user=request.auth,
+            action="COMPLETE_COURSE",
+            detail={
+                "course_id": enrollment.course.id,
+                "course_title": enrollment.course.title
+            }
         )
 
     update_learning_analytics(enrollment)
