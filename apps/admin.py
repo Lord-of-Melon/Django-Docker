@@ -13,6 +13,7 @@ class CourseAdmin(admin.ModelAdmin):
     search_fields = ('title',)
     list_filter = ('category',)
     inlines = [LessonInline]
+    readonly_fields = ("student_count","average_rating",)
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
